@@ -221,6 +221,31 @@ wss.on('connection', (ws, req) => {
       return;
     }
 
+    // Handle disconnect message to clear room
+    if (data.type === 'disconnect') {
+      const session = sessions[ws.deviceId];
+      if (session) {
+        console.log(`[Disconnect] (${ip}) deviceId=${ws.deviceId}, role=${ws.role} -> clearing room`);
+        
+        // Notify the other side about disconnection
+        const other = (ws.role === 'host') ? session.controller : session.host;
+        if (other && other.readyState === WebSocket.OPEN) {
+          try {
+            other.send(JSON.stringify({ type: 'partner-disconnected' }));
+            console.log(`[Disconnect] deviceId=${ws.deviceId} -> notified other side (${other.role}@${other.clientIp}) of disconnect`);
+          } catch {}
+        }
+        
+        // Clear the entire session
+        delete sessions[ws.deviceId];
+        console.log(`[Disconnect] Session for deviceId=${ws.deviceId} cleared`);
+        
+        // Close this connection
+        ws.close();
+      }
+      return;
+    }
+
     // After auth: relay signaling messages between host <-> controller
     const session = sessions[ws.deviceId];
     if (!session) {
